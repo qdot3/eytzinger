@@ -1,9 +1,19 @@
 [package]
 name = "eytzinger-cursor"
-version = "0.1.0"
-edition = "2024"
+version = "1.0.0"
+authors = ["qdot3"]
+edition = "2021"
+# rust-version = "1.87.0"
+description = "A light-weight cursor over implicit binary tree in Eytzinger layout"
+# documentation = ""
+readme = "README.md"
+# homepage = ""
+repository = "https://github.com/qdot3/eytzinger"
+license = "MIT"
+categories = ["algorithms", "data-structures", "no-std"]
+keywords = ["eytzinger", "binary-search", "cache-friendly"]
+# include = []
+exclude = ["rust-toolchain.toml", "rustfmt.toml"]
+publish = true
 
 [dependencies]
-
-[dev-dependencies]
-googletest = "0.14.4"

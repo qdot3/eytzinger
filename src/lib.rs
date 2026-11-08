@@ -1,5 +1,3 @@
-//! # `eytzinger-cursor`
-//!
 //! A lightweight cursor over slices in [Eytzinger layout].
 //! It moves through the elements in sorted order, one step at a time, in either direction.
 //!
@@ -8,8 +6,8 @@
 //!
 //! [Eytzinger layout]: https://algorithmica.org/en/eytzinger
 
-#![warn(clippy::all)]
-#![warn(clippy::pedantic)]
+#![warn(clippy::all, clippy::cargo, clippy::pedantic)]
+#![no_std]
 
 /// A cyclic cursor over a slice whose elements are in Eytzinger layout.
 ///
@@ -140,11 +138,11 @@ impl Cursor {
         let Self { len, mut ptr } = *self;
         ptr = ptr * 2 + 1;
         if ptr <= len {
-            // go down the tree
+            // go down to the left-most leaf in the right subtree
             ptr <<= ptr.leading_zeros() - len.leading_zeros();
             ptr >>= if ptr > len { 1 } else { 0 };
         } else {
-            // go up the tree
+            // go up through left-child edges, then up one right-child edge
             ptr >>= ptr.trailing_ones();
             ptr >>= 1;
         }
@@ -183,11 +181,11 @@ impl Cursor {
         let Self { len, mut ptr } = *self;
         ptr *= 2;
         if ptr <= len {
-            // go down the tree
+            // go down the right-most node in the left subtree
             ptr = !(!ptr << (ptr.leading_zeros() - len.leading_zeros()));
             ptr >>= if ptr > len { 1 } else { 0 };
         } else {
-            // go up the tree
+            // go up through right-child edges, then up one left-child edge
             ptr >>= ptr.trailing_zeros();
             ptr >>= 1;
         }
