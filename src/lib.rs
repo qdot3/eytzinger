@@ -11,8 +11,6 @@
 
 /// A cyclic cursor over a slice whose elements are in Eytzinger layout.
 ///
-/// All methods work in constant time.
-///
 /// # Ghost position
 ///
 /// The cursor has one extra position that points to no element.
@@ -52,6 +50,10 @@ impl Cursor {
     ///
     /// `len` must be **no more** than `isize::MAX`.
     ///
+    /// # Time complexity
+    ///
+    /// O(1)
+    ///
     /// # Examples
     ///
     /// ```
@@ -66,7 +68,31 @@ impl Cursor {
         Self { len, ptr: 0 }
     }
 
+    /// Returns the length of the slice that the cursor assumes.
+    ///
+    /// # Time complexity
+    ///
+    /// O(1)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use eytzinger_cursor::Cursor;
+    /// #
+    /// let mut cursor = Cursor::new(10);
+    /// assert_eq!(cursor.len(), 10);
+    /// ```
+    #[must_use]
+    #[allow(clippy::len_without_is_empty)]
+    pub const fn len(&self) -> usize {
+        self.len
+    }
+
     /// Returns the current index in the slice, or `None` if the cursor is at the ghost position.
+    ///
+    /// # Time complexity
+    ///
+    /// O(1)
     ///
     /// # Examples
     ///
@@ -87,7 +113,11 @@ impl Cursor {
 
     /// Moves the cursor to the element at index `i` in the slice.
     ///
-    /// If the given index `i` is out of bounds, the cursor does not change and returns `false`.
+    /// If the given index `i` is out of bounds, the cursor moves to the ghost.
+    ///
+    /// # Time complexity
+    ///
+    /// O(1)
     ///
     /// # Examples
     ///
@@ -97,22 +127,94 @@ impl Cursor {
     /// let mut cursor = Cursor::new(10);
     ///
     /// assert!(cursor.set(5));
+    /// assert_eq!(cursor.get(), Some(5));
+    ///
     /// assert!(!cursor.set(100));
+    /// assert_eq!(cursor.get(), None);
     /// ```
     pub const fn set(&mut self, i: usize) -> bool {
-        if i < self.len {
-            self.ptr = i + 1;
-            true
+        self.ptr = if i < self.len { i + 1 } else { 0 };
+        self.ptr > 0
+    }
+
+    /// Moves the cursor to the node that stores `nth` smallest value
+    /// and returns the index in the slice.
+    ///
+    /// If `nth` is out of bounds, the cursor moves to the ghost.
+    ///
+    /// See [`get`](Self::get) for the return value.
+    ///
+    /// # Time complexity
+    ///
+    /// O(log N)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use eytzinger_cursor::Cursor;
+    /// #
+    /// for (n, layout) in [
+    ///     (0, vec![]),
+    ///     (1, vec![0]),
+    ///     (7, vec![3, 1, 5, 0, 2, 4, 6]),
+    ///     (10, vec![6, 3, 8, 1, 5, 7, 9, 0, 2, 4]),
+    /// ] {
+    ///     let mut cursor = Cursor::new(n);
+    ///
+    ///     for i in 0..n {
+    ///         assert_eq!(layout[cursor.nth(i).unwrap()], i)
+    ///     }
+    ///     // invalid input
+    ///     assert_eq!(cursor.nth(100), None);
+    /// }
+    /// ```
+    pub fn nth(&mut self, mut nth: usize) -> Option<usize> {
+        use core::cmp::Ordering;
+
+        if nth < self.len {
+            nth += 1;
+            // move the cursor to the root
+            let mut ptr = 1;
+
+            let height = self.len.ilog2();
+            let mut upper = (1 << height) - 1;
+            let mut ground = self.len - upper;
+            for _ in 0..height {
+                upper /= 2;
+                // size of left subtree
+                let l = upper + ground.min(upper + 1);
+
+                match nth.cmp(&(l + 1)) {
+                    // go down left
+                    Ordering::Less => {
+                        ptr *= 2;
+                        ground = ground.min(upper + 1);
+                    }
+                    // go down right
+                    Ordering::Greater => {
+                        ptr = ptr * 2 + 1;
+                        nth -= l + 1;
+                        ground -= ground.min(upper + 1);
+                    }
+                    Ordering::Equal => break,
+                }
+            }
+
+            self.ptr = ptr;
         } else {
-            false
+            self.ptr = 0;
         }
+
+        self.get()
     }
 
     /// Moves the cursor to the next element and returns the index in the slice.
     ///
-    /// See [`get`] for the return value.
+    /// See [`get`](Self::get) for the return value.
     ///
-    /// [`get`]: Self::get
+    /// # Time complexity
+    ///
+    /// O(1)
     ///
     /// # Examples
     ///
@@ -153,9 +255,11 @@ impl Cursor {
 
     /// Moves the cursor to the previous element and returns the index in the slice.
     ///
-    /// See [`get`] for the return value.
+    /// See [`get`](Self::get) for the return value.
     ///
-    /// [`get`]: Self::get
+    /// # Time complexity
+    ///
+    /// O(1)
     ///
     /// # Examples
     ///
