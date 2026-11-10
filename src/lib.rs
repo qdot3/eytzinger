@@ -1,40 +1,75 @@
-//! A lightweight cursor over slices in [Eytzinger layout].
-//! It moves through the elements in sorted order, one step at a time, in either direction.
+//! A lightweight cursor over an [Eytzinger array] (an implicit binary search tree).
 //!
-//! Eytzinger layout stores sorted values as an implicit binary tree,
-//! which makes binary search cache-friendly.
+//! # Why Eytzinger
 //!
-//! [Eytzinger layout]: https://algorithmica.org/en/eytzinger
-
+//! In this layout, the elements that a binary search may visit `n` steps ahead
+//! live in consecutive space.
+//! So we can prefetch them with only a few cache line loads, and this hides memory latency.
+//!
+//! [Eytzinger array]: https://algorithmica.org/en/eytzinger
+//!
+//! # Example
+//!
+//! Constructs an Eytzinger array.
+//!
+//! ```
+//! # use eytzinger_cursor::Cursor;
+//! #
+//! let mut sorted = vec![2, 3, 5, 7, 11, 13, 17];
+//!
+//! let mut n = sorted.len();
+//! let mut cursor = Cursor::new(n);
+//!
+//! let mut arr = vec![!0; n];
+//! let mut val = 0;
+//! while let Some(ptr) = cursor.prev() {
+//!     arr[ptr] = sorted.pop().unwrap();
+//! }
+//!
+//! assert_eq!(arr, [
+//!          7,
+//!       3,    13,
+//!     2, 5, 11, 17,
+//! ]);
+//! ```
 #![warn(clippy::all, clippy::cargo, clippy::pedantic)]
 #![no_std]
 
-/// A cyclic cursor over a slice whose elements are in Eytzinger layout.
+/// A lightweight cyclic cursor that walks an Eytzinger array.
+///
+/// This `Cursor` can move forward and backward in constant time.
+/// It can also jump to the position where the n-th smallest value lives.
+///
+/// By using `Cursor`, an Eytzinger array can be constructed from sorted values in linear time
+/// and vice versa.
 ///
 /// # Ghost position
 ///
 /// The cursor has one extra position that points to no element.
-/// It sites between the last and the first position.
+/// It sits between the last and the first position.
 ///
 /// # Examples
-///
-/// Fill a slice with the sorted values in Eytzinger layout.
 ///
 /// ```
 /// # use eytzinger_cursor::Cursor;
 /// #
 /// let n = 10;
-///
-/// let mut slice = vec![!0; n];
-/// let mut value = 0;
-///
 /// let mut cursor = Cursor::new(n);
+///
+/// let mut val = 0;
+/// let mut arr = vec![!0; n];
 /// while let Some(i) = cursor.next() {
-///     slice[i] = value;
-///     value += 1;
+///     arr[i] = val;
+///     val += 1;
 /// }
 ///
-/// assert_eq!(slice, vec![6, 3, 8, 1, 5, 7, 9, 0, 2, 4])
+/// let mut rra = vec![!0; n];
+/// while let Some(i) = cursor.prev() {
+///     val -= 1;
+///     rra[i] = val;
+/// }
+///
+/// assert_eq!(arr, rra)
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Cursor {
@@ -44,7 +79,9 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    /// Create a new cursor for a slice of `len` elements.
+    /// Creates a new cursor for an array of `len` elements.
+    ///
+    /// The cursor starts at the ghost.
     ///
     /// # Panics
     ///
@@ -68,7 +105,30 @@ impl Cursor {
         Self { len, ptr: 0 }
     }
 
-    /// Returns the length of the slice that the cursor assumes.
+    /// Moves the cursor to the ghost.
+    ///
+    /// # Time complexity
+    ///
+    /// O(1)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use eytzinger_cursor::Cursor;
+    /// #
+    /// let mut cursor = Cursor::new(10);
+    ///
+    /// cursor.nth(5);
+    /// assert_eq!(cursor.get(), Some(4));
+    ///
+    /// cursor.reset();
+    /// assert_eq!(cursor.get(), None);
+    /// ```
+    pub const fn reset(&mut self) {
+        self.ptr = 0
+    }
+
+    /// Returns the length of the array that the cursor assumes.
     ///
     /// # Time complexity
     ///
@@ -88,7 +148,7 @@ impl Cursor {
         self.len
     }
 
-    /// Returns the current index in the slice, or `None` if the cursor is at the ghost position.
+    /// Returns the current index in the array, or `None` if the cursor is at the ghost position.
     ///
     /// # Time complexity
     ///
@@ -111,9 +171,9 @@ impl Cursor {
         self.ptr.checked_sub(1)
     }
 
-    /// Moves the cursor to the element at index `i` in the slice.
+    /// Moves the cursor to the element at index `i` in the array.
     ///
-    /// If the given index `i` is out of bounds, the cursor moves to the ghost.
+    /// If `i` is out of bounds, the cursor moves to the ghost.
     ///
     /// # Time complexity
     ///
@@ -126,19 +186,18 @@ impl Cursor {
     /// #
     /// let mut cursor = Cursor::new(10);
     ///
-    /// assert!(cursor.set(5));
+    /// cursor.set(5);
     /// assert_eq!(cursor.get(), Some(5));
     ///
-    /// assert!(!cursor.set(100));
+    /// cursor.set(100);
     /// assert_eq!(cursor.get(), None);
     /// ```
-    pub const fn set(&mut self, i: usize) -> bool {
+    pub const fn set(&mut self, i: usize) {
         self.ptr = if i < self.len { i + 1 } else { 0 };
-        self.ptr > 0
     }
 
-    /// Moves the cursor to the node that stores `nth` smallest value
-    /// and returns the index in the slice.
+    /// Moves the cursor to the node that stores the `nth` smallest value
+    /// and returns the index in the array.
     ///
     /// If `nth` is out of bounds, the cursor moves to the ghost.
     ///
@@ -208,7 +267,7 @@ impl Cursor {
         self.get()
     }
 
-    /// Moves the cursor to the next element and returns the index in the slice.
+    /// Moves the cursor to the next element and returns the index in the array.
     ///
     /// See [`get`](Self::get) for the return value.
     ///
@@ -244,7 +303,7 @@ impl Cursor {
             ptr <<= ptr.leading_zeros() - len.leading_zeros();
             ptr >>= if ptr > len { 1 } else { 0 };
         } else {
-            // go up through left-child edges, then up one right-child edge
+            // go up through right-child edges, then up one left-child edge
             ptr >>= ptr.trailing_ones();
             ptr >>= 1;
         }
@@ -253,7 +312,7 @@ impl Cursor {
         self.get()
     }
 
-    /// Moves the cursor to the previous element and returns the index in the slice.
+    /// Moves the cursor to the previous element and returns the index in the array.
     ///
     /// See [`get`](Self::get) for the return value.
     ///
@@ -285,11 +344,11 @@ impl Cursor {
         let Self { len, mut ptr } = *self;
         ptr *= 2;
         if ptr <= len {
-            // go down the right-most node in the left subtree
+            // go down to the right-most node in the left subtree
             ptr = !(!ptr << (ptr.leading_zeros() - len.leading_zeros()));
             ptr >>= if ptr > len { 1 } else { 0 };
         } else {
-            // go up through right-child edges, then up one left-child edge
+            // go up through left-child edges, then up one right-child edge
             ptr >>= ptr.trailing_zeros();
             ptr >>= 1;
         }

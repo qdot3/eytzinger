@@ -1,34 +1,39 @@
 # eytzinger-cursor
 
-A lightweight cursor over slices in [Eytzinger layout].
-It moves through the elements in sorted order, one step at a time, in either direction.
+A lightweight cursor over an [Eytzinger array] (an implicit binary search tree).
 
-Eytzinger layout stores sorted values as an implicit binary tree,
-which makes binary search cache-friendly.
+## Why Eytzinger
 
-[Eytzinger layout]: https://algorithmica.org/en/eytzinger
+In this layout, the elements that a binary search may visit `n` steps ahead
+live in consecutive space.
+So we can prefetch them with only a few cache line loads, and this hides memory latency.
 
-## Examples
+[Eytzinger array]: https://algorithmica.org/en/eytzinger
 
-Fill a slice with the sorted values in Eytzinger layout.
+## Example
+
+Constructs an Eytzinger array.
 
 ```rust
-use eytzinger_cursor::Cursor;
+#
+let mut sorted = vec![2, 3, 5, 7, 11, 13, 17];
 
-let n = 10;
-
-let mut slice = vec![!0; n];
-let mut value = 0;
-
+let mut n = sorted.len();
 let mut cursor = Cursor::new(n);
-while let Some(i) = cursor.next() {
-    slice[i] = value;
-    value += 1;
+
+let mut arr = vec![!0; n];
+let mut val = 0;
+while let Some(ptr) = cursor.prev() {
+    arr[ptr] = sorted.pop().unwrap();
 }
 
-assert_eq!(slice, vec![6, 3, 8, 1, 5, 7, 9, 0, 2, 4])
+assert_eq!(arr, [
+         7,
+      3,    13,
+    2, 5, 11, 17,
+]);
 ```
 
-## License
+## LICENSE
 
 MIT

@@ -1,10 +1,10 @@
 [package]
 name = "eytzinger-cursor"
-version = "2.0.0"
+version = "3.0.0"
 authors = ["qdot3"]
 edition = "2021"
 # rust-version = "1.87.0"
-description = "A light-weight cursor over implicit binary tree in Eytzinger layout"
+description = "A lightweight cursor that walks an Eytzinger array"
 # documentation = ""
 readme = "README.md"
 # homepage = ""
